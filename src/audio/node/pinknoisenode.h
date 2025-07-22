@@ -8,7 +8,10 @@ namespace nap
 
     namespace audio
     {
-    
+
+        /**
+         * Pink noise generator
+         */
         class NAPAPI PinkNoiseNode : public Node
         {
             RTTI_ENABLE(Node)
