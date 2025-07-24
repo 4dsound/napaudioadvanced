@@ -20,7 +20,7 @@ namespace nap
                 float whiteNoise = math::random(-1.f, 1.f);
                 float pinkNoise = 0.f;
 
-                // Process it through the cascase of onepole lowpass filters
+                // Process it through the cascade of onepole lowpass filters
                 auto amplitude = mAmplitudes.begin();
                 for (auto& filter : mFilters)
                     pinkNoise += filter->process(whiteNoise) * *amplitude++;
