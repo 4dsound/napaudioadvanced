@@ -216,6 +216,12 @@ namespace nap
 			void disconnect(unsigned int channel, OutputPin& pin) override { (*mChannels[channel]->getInputs().begin())->disconnect(pin); }
             int getInputChannelCount() const override { return (mChannels[0]->getInputs().size() >= 1) ? mChannels.size() : 0; }
 
+            // Vector behaviour
+            NodeType& operator[](int index) { return *mChannels[index]; }
+            const NodeType& operator[](int index) const { return *mChannels[index]; }
+            typename std::vector<SafeOwner<NodeType>>::iterator begin() { return mChannels.begin(); }
+            typename std::vector<SafeOwner<NodeType>>::iterator end() { return mChannels.end(); }
+
         private:
             std::vector<SafeOwner<NodeType>> mChannels;
         };
