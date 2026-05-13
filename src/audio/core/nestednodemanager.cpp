@@ -35,7 +35,7 @@ namespace nap
         {
             for (auto i = 0; i < _mInputs.size(); ++i)
             {
-                auto inputBuffer = _mInputs[i]->pull();
+                auto inputBuffer = _mInputs[i]->pullOptional().get();
                 if (inputBuffer == nullptr)
                     mInputBuffers[i] = nullptr;
                 else

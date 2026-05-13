@@ -23,7 +23,7 @@ namespace nap
         void BufferNode::update()
         {
             auto& outputBuffer = getOutputBuffer(audioOutput);
-            auto inputBuffer = audioInput.pull();
+            auto inputBuffer = audioInput.pullOptional().get();
             if (inputBuffer != nullptr)
                 memcpy(outputBuffer.data(), inputBuffer->data(), mCacheSize);
             else

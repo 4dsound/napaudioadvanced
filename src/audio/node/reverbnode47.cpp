@@ -158,17 +158,20 @@ namespace nap
 
             void ReverbNode::process()
             {
-                auto inputBuffer = audioInput.pull();
-                if (inputBuffer == nullptr)
-                    return;
-
+                auto inputBuffer = audioInput.pullOptional();
                 auto& outputBuffer = getOutputBuffer(audioOutput);
+                if (inputBuffer == nullptr)
+                {
+                    std::fill(outputBuffer.begin(), outputBuffer.end(), 0.f);
+                    return;
+                }
+
                 auto& diffusionOutputBuffer1 = getOutputBuffer(diffusionOutput1);
                 auto& diffusionOutputBuffer2 = getOutputBuffer(diffusionOutput2);
                 auto& diffusionOutputBuffer3 = getOutputBuffer(diffusionOutput3);
-                auto diffusionInputBuffer1 = diffusionInput1.pull();
-                auto diffusionInputBuffer2 = diffusionInput2.pull();
-                auto diffusionInputBuffer3 = diffusionInput3.pull();
+                auto diffusionInputBuffer1 = diffusionInput1.pullOptional().get();
+                auto diffusionInputBuffer2 = diffusionInput2.pullOptional().get();
+                auto diffusionInputBuffer3 = diffusionInput3.pullOptional().get();
 
                 for (auto i = 0; i < outputBuffer.size(); ++i)
                 {
@@ -179,7 +182,7 @@ namespace nap
                     mDelays[0].setDelay(mSize * mSettings.mDelaySizeMultipliers[0] * (1 + modulation) * mSamplesPerMillisecond);
 
                     // Input filtering
-                    auto value = (*inputBuffer)[i];
+                    auto value = inputBuffer[i];
                     value = mInputLowCutOnePole.process(value);
                     value = mInputHighCutOnePole.process(value);
 

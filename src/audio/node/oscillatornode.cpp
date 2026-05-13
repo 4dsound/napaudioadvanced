@@ -132,7 +132,7 @@ namespace nap
         void OscillatorNode::process()
         {
             auto& outputBuffer = getOutputBuffer(output);
-            SampleBuffer* fmInputBuffer = fmInput.pull();
+            SampleBuffer* fmInputBuffer = fmInput.pullOptional().get();
 
             if (mWave == nullptr)
             {

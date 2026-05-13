@@ -48,7 +48,7 @@ namespace nap
 
         void DelayNode::process()
         {
-            auto inputBuffer = input.pull();
+            auto inputBuffer = input.pullOptional().get();
             auto& outputBuffer = getOutputBuffer(output);
             auto feedback = mFeedback.load();
             SampleValue delayedSample = 0;

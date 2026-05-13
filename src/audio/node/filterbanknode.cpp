@@ -117,9 +117,12 @@ namespace nap
         
         void FilterBankNode::process()
         {
-            auto& inputBuffer = *audioInput.pull();
+            auto inputBuffer = audioInput.pullOptional().get();
             auto& outputBuffer = getOutputBuffer(output);
-			mFilterBank.processBuffer(inputBuffer, outputBuffer);
+        	if (inputBuffer != nullptr)
+				mFilterBank.processBuffer(*inputBuffer, outputBuffer);
+        	else
+        		std::fill(outputBuffer.begin(), outputBuffer.end(), 0.f);
         }
         
         

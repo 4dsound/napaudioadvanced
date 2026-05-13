@@ -32,7 +32,7 @@ namespace nap
         
         void CircularBufferNode::process()
         {
-            auto inputBuffer = audioInput.pull();
+            auto inputBuffer = audioInput.pullOptional().get();
             if (inputBuffer == nullptr)
             {
                 for (auto i = 0; i < getBufferSize(); ++i)

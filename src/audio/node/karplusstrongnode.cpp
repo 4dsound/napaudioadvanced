@@ -22,13 +22,13 @@ namespace nap
         void KarplusStrongNode::process()
         {
             auto& outputBuffer = getOutputBuffer(audioOutput);
-            auto inputBuffer = audioInput.pull();
+            auto inputBuffer = audioInput.pullOptional();
             if (mNegativePolarity)
                 for (auto i = 0; i < getBufferSize(); ++i)
-                    outputBuffer[i] = mLowCut.process(mKarplusStrong.processNegative((*inputBuffer)[i]));
+                    outputBuffer[i] = mLowCut.process(mKarplusStrong.processNegative(inputBuffer[i]));
             else
                 for (auto i = 0; i < getBufferSize(); ++i)
-                    outputBuffer[i] = mLowCut.process(mKarplusStrong.processPositive((*inputBuffer)[i]));
+                    outputBuffer[i] = mLowCut.process(mKarplusStrong.processPositive(inputBuffer[i]));
         }
 
 

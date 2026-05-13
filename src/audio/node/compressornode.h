@@ -91,11 +91,13 @@ namespace nap
         {
             RTTI_ENABLE(Node)
         public:
-            CompressorNode(NodeManager& manager) : Node(manager), faustCompressor(getSampleRate()) {
+            CompressorNode(NodeManager& manager) : Node(manager), faustCompressor(getSampleRate())
+            {
                 setRatio(4.);
                 setThreshold(-6.);
                 setAttack(0.0008);
                 setRelease(0.5);
+                mZeroBuffer.resize(getBufferSize(), 0.f);
             }
             
             InputPin audioInput = { this };     ///< Audio input pin
@@ -127,8 +129,10 @@ namespace nap
             
         private:
             void process() override;
+            void bufferSizeChanged(int bufferSize) override { mZeroBuffer.resize(bufferSize, 0.f); }
             
             FaustCompressor faustCompressor;
+            SampleBuffer mZeroBuffer;
             
         };
         

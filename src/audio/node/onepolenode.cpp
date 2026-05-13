@@ -28,12 +28,23 @@ namespace nap
         void OnePoleLowPassNode::process()
         {
             auto& outputBuffer = getOutputBuffer(output);
-            auto& inputBuffer = *input.pull();
-            
-            for (auto i = 0; i < outputBuffer.size(); ++i)
+            auto inputBuffer = input.pullOptional().get();
+
+            if (inputBuffer != nullptr)
             {
-                outputBuffer[i] = a0.getNextValue() * inputBuffer[i] + b1.getNextValue() * mTemp;
-                mTemp = outputBuffer[i];
+                for (auto i = 0; i < outputBuffer.size(); ++i)
+                {
+                    outputBuffer[i] = a0.getNextValue() * (*inputBuffer)[i] + b1.getNextValue() * mTemp;
+                    mTemp = outputBuffer[i];
+                }
+            }
+            else
+            {
+                for (auto i = 0; i < outputBuffer.size(); ++i)
+                {
+                    outputBuffer[i] = b1.getNextValue() * mTemp;
+                    mTemp = outputBuffer[i];
+                }
             }
         }
         
@@ -61,7 +72,7 @@ namespace nap
         void OnePoleHighPassNode::process()
         {
             auto& outputBuffer = getOutputBuffer(output);
-            auto& inputBuffer = *input.pull();
+            auto inputBuffer = input.pullOptional();
             
             for (auto i = 0; i < outputBuffer.size(); ++i)
             {

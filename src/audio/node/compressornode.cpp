@@ -54,11 +54,11 @@ namespace nap {
 
         void CompressorNode::process()
         {
-            auto& inputBuffer = *audioInput.pull();
+            auto inputBuffer = audioInput.pullOptional().get();
             auto& outputBuffer = getOutputBuffer(audioOutput);
 
             // Converts std::vector to float arrays
-            float* inputArray = &inputBuffer[0];
+            float* inputArray = inputBuffer ? &(*inputBuffer)[0] : &mZeroBuffer[0];
             float* outputArray = &outputBuffer[0];
 
             faustCompressor.compute(getBufferSize(), inputArray, outputArray);
