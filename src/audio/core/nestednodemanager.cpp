@@ -52,6 +52,13 @@ namespace nap
         }
 
 
+        void NestedNodeManagerNode::sampleRateChanged(float sampleRate)
+        {
+            if (mNestedNodeManager != nullptr)
+                mNestedNodeManager->setSampleRate(sampleRate);
+        }
+
+
         bool NestedNodeManagerInstance::init(NodeManager &nodeManager, int inputChannelCount, int outputChannelCount, int internalBufferSize, int reserveProcesses, int reserveRootProcesses, utility::ErrorState &errorState)
         {
             mNode = nodeManager.makeSafe<NestedNodeManagerNode>(nodeManager);

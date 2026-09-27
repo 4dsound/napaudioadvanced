@@ -66,6 +66,7 @@ namespace nap
 
         private:
             void process() override;
+            void sampleRateChanged(float sampleRate) override;
 
             std::unique_ptr<NodeManager> mNestedNodeManager = nullptr;
             std::vector<std::unique_ptr<InputPin>> _mInputs;
