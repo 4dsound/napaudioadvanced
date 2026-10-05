@@ -27,7 +27,7 @@ namespace nap
          * @tparam NodeType The type of the Node that will be wrapped by this object's instance.
          */
         template <typename NodeType>
-        class NAPAPI NodeObject : public AudioObject
+        class NodeObject : public AudioObject
         {
             RTTI_ENABLE(AudioObject)
 
@@ -70,7 +70,7 @@ namespace nap
          * @tparam NodeType type of the wrapped node.
          */
         template <typename NodeType>
-        class NAPAPI NodeObjectInstance : public NodeObjectInstanceBase
+        class NodeObjectInstance : public NodeObjectInstanceBase
         {
             RTTI_ENABLE(NodeObjectInstanceBase)
             
@@ -136,7 +136,7 @@ namespace nap
          * @tparam NodeType The type of the nodes that process one single channel of the NodeObject.
          */
         template <typename NodeType>
-        class NAPAPI ParallelNodeObject : public ParallelNodeObjectBase
+        class ParallelNodeObject : public ParallelNodeObjectBase
         {
             RTTI_ENABLE(ParallelNodeObjectBase)
 
@@ -180,7 +180,7 @@ namespace nap
          * @tparam NodeType
          */
         template <typename NodeType>
-        class NAPAPI ParallelNodeObjectInstance : public ParallelNodeObjectInstanceBase
+        class ParallelNodeObjectInstance : public ParallelNodeObjectInstanceBase
         {
             RTTI_ENABLE(ParallelNodeObjectInstanceBase)
 
