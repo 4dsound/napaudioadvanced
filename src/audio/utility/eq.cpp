@@ -18,7 +18,7 @@ namespace nap
 			mQ = q;
 			mSampleRate = sampleRate;
 			float b0, b1, b2, a1, a2, c0, d0;
-			calcCoeffs(b0, b1, b2, a1, a2, c0, d0);
+			calcCoeffs(mMode, mFrequency, mGain, mQ, mSampleRate, b0, b1, b2, a1, a2, c0, d0);
 			mBiquad.resetCoefficients(b0, b1, b2, a1, a2, c0, d0);
 		}
 
@@ -31,7 +31,7 @@ namespace nap
 			mQ = q;
 			mSampleRate = sampleRate;
 			float b0, b1, b2, a1, a2, c0, d0;
-			calcCoeffs(b0, b1, b2, a1, a2, c0, d0);
+			calcCoeffs(mMode, mFrequency, mGain, mQ, mSampleRate, b0, b1, b2, a1, a2, c0, d0);
 			mBiquad.setCoefficients(b0, b1, b2, a1, a2, c0, d0);
 		}
 
@@ -40,13 +40,13 @@ namespace nap
 		{
 			mSampleRate = sampleRate;
 			float b0, b1, b2, a1, a2, c0, d0;
-			calcCoeffs(b0, b1, b2, a1, a2, c0, d0);
+			calcCoeffs(mMode, mFrequency, mGain, mQ, mSampleRate, b0, b1, b2, a1, a2, c0, d0);
 			mBiquad.setCoefficients(b0, b1, b2, a1, a2, c0, d0);
 		}
 
 
 		/**
-		 * Calculates the biquad coefficients for the current mode using the RBJ audio EQ cookbook.
+		 * Calculates the biquad coefficients for the given band settings using the RBJ audio EQ cookbook.
 		 *
 		 * The coefficients follow the textbook convention, matching BiquadFilter:
 		 *
@@ -58,36 +58,37 @@ namespace nap
 		 * normalized so that a0 == 1, which is why a0 is not part of the signature. c0 is the wet gain
 		 * and d0 the dry gain, used to blend the filtered signal with the input.
 		 */
-		void Eq::calcCoeffs(float &b0, float &b1, float &b2, float &a1, float &a2, float &c0, float &d0)
+		void Eq::calcCoeffs(Mode mode, ControllerValue frequency, ControllerValue gain, ControllerValue q,
+			float sampleRate, float& b0, float& b1, float& b2, float& a1, float& a2, float& c0, float& d0)
 		{
 			// Guard against a zero or negative Q, which would divide by zero below.
-			float q = mQ > 0.f ? mQ : 0.70710678f;
+			float qValue = q > 0.f ? q : 0.70710678f;
 
 			// Keep the frequency strictly inside the audible band. At or above Nyquist omega reaches
 			// pi and the filter's poles leave the unit circle, so the output runs away to infinity.
-			float nyquist = 0.5f * mSampleRate;
-			float frequency = mFrequency;
-			if (frequency < 1.f)
-				frequency = 1.f;
-			if (frequency > nyquist * 0.999f)
-				frequency = nyquist * 0.999f;
+			float nyquist = 0.5f * sampleRate;
+			float frequencyValue = frequency;
+			if (frequencyValue < 1.f)
+				frequencyValue = 1.f;
+			if (frequencyValue > nyquist * 0.999f)
+				frequencyValue = nyquist * 0.999f;
 
 			// Angular frequency of the center / shelf frequency, and the intermediate terms shared
 			// by all modes. The factor is 2*pi (not pi): with pi the peak lands at half the requested
 			// frequency, which is the classic symptom of a half-angle omega here.
-			float omega = math::PIX2 * frequency / mSampleRate;
+			float omega = math::PIX2 * frequencyValue / sampleRate;
 			float sinOmega = std::sin(omega);
 			float cosOmega = std::cos(omega);
-			float alpha = sinOmega / (2.f * q);
+			float alpha = sinOmega / (2.f * qValue);
 
 			// Linear amplitude of the gain. The square root (10^(G/40) rather than 10^(G/20)) is what
 			// makes the peak of a peaking filter land exactly at G dB instead of 2G dB.
-			float A = math::power<float>(10.f, mGain / 40.f);
+			float A = math::power<float>(10.f, gain / 40.f);
 
 			// The raw (unnormalized) coefficients of the transfer function, filled in per mode.
 			float b0Raw, b1Raw, b2Raw, a0Raw, a1Raw, a2Raw;
 
-			switch (mMode)
+			switch (mode)
 			{
 				case Mode::Peak:
 				{
