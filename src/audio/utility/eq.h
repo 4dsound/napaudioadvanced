@@ -17,7 +17,7 @@ namespace nap
 		class NAPAPI Eq
 		{
 		public:
-			enum class Mode { Peak, LowShelf, HighShelf };
+			enum class Mode { Peak, LowShelf, HighShelf, LowPass, HighPass };
 
 			Eq() = default;
 
@@ -29,7 +29,10 @@ namespace nap
 			SampleValue process(SampleValue input) { return mBiquad.process(input); }
 
 			/**
-			 * Calculates the biquad coefficients for a single band using the RBJ audio EQ cookbook.
+			 * Calculates the biquad coefficients for a single band. Peak and shelf modes use the RBJ
+			 * audio EQ cookbook, the lowpass and highpass modes use the second order Butterworth
+			 * algorithm also used by FilterNode, generalized with a resonance Q: Q = 1/sqrt(2) is the
+			 * maximally flat Butterworth response, higher Q adds a resonant peak at the cutoff.
 			 * Static because the coefficients only depend on the band settings and the sample rate,
 			 * not on any filter state, so they can be computed without an Eq instance.
 			 *

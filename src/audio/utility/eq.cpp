@@ -127,6 +127,45 @@ namespace nap
 					a2Raw = (A + 1.f) - (A - 1.f) * cosOmega - twoSqrtAAlpha;
 					break;
 				}
+				case Mode::LowPass:
+				{
+					// Second order lowpass, the same algorithm as FilterNode::calcCoeffs, generalized
+					// with a resonance Q. c is cot(omega/2), the intermediate the form is written in,
+					// and c/Q controls the pole radius: Q = 1/sqrt(2) makes c/Q = sqrt(2)*c, which is
+					// exactly the maximally flat Butterworth response and the default of the guard.
+					// Higher Q pulls the poles towards the unit circle, adding a resonant peak at the
+					// cutoff; lower Q damps the corner. The gain is a linear factor on the numerator
+					// only, so the filter stays stable for any gain and any Q > 0.
+					float c = 1.f / std::tan(math::PI * frequencyValue / sampleRate);
+					float cSqr = c * c;
+					float cOverQ = c / qValue;
+					float G = math::power<float>(10.f, gain / 20.f);
+
+					b0Raw = G;
+					b1Raw = 2.f * G;
+					b2Raw = G;
+					a0Raw = 1.f + cOverQ + cSqr;
+					a1Raw = 2.f * (1.f - cSqr);
+					a2Raw = 1.f - cOverQ + cSqr;
+					break;
+				}
+				case Mode::HighPass:
+				{
+					// Second order highpass, same as LowPass but with c = tan(omega/2) and an
+					// inverted numerator, so the passband sits at Nyquist instead of DC.
+					float c = std::tan(math::PI * frequencyValue / sampleRate);
+					float cSqr = c * c;
+					float cOverQ = c / qValue;
+					float G = math::power<float>(10.f, gain / 20.f);
+
+					b0Raw = G;
+					b1Raw = -2.f * G;
+					b2Raw = G;
+					a0Raw = 1.f + cOverQ + cSqr;
+					a1Raw = 2.f * (cSqr - 1.f);
+					a2Raw = 1.f - cOverQ + cSqr;
+					break;
+				}
 			}
 
 			// Normalize everything by a0 so the denominator starts with 1. The coefficients keep their
