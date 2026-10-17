@@ -1,8 +1,7 @@
 #pragma once
 
 #include <audio/utility/biquad.h>
-
-#include "audio/utility/audiotypes.h"
+#include <audio/utility/audiotypes.h>
 
 namespace nap
 {
