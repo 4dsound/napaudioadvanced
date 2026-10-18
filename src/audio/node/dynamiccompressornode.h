@@ -9,155 +9,174 @@
 
 namespace nap
 {
-    namespace audio
-    {
+	namespace audio
+	{
 
-        /**
-         * Standard dynamic range compressor, with an optional limiter mode.
-         *
-         * The input signal level is measured with a fast/slow envelope follower.
-         * Whenever the measured level exceeds the threshold the gain is reduced
-         * according to the compression ratio. The amount of reduction is smoothed
-         * with separate attack and release time constants and is finally applied
-         * to the signal (optionally with automatic makeup gain).
-         *
-         * The transfer characteristic follows the classic piecewise-linear law:
-         *   x <= threshold            :  y = x
-         *   x >  threshold            :  y = threshold + (x - threshold) / ratio
-         *
-         * In @ref Mode::Limiter the node drives its gain from the envelope
-         * follower to keep the measured level at or below the threshold (acting
-         * as an infinite-ratio limiter) and applies a per-sample safety clamp so
-         * that no transient can push the output above the ceiling even when the
-         * envelope lags. The attack and release times still shape the gain
-         * response; the ratio parameter is not used in this mode.
-         *
-         * All parameters are exposed in human-readable units (dB, seconds) and
-         * can be changed at any time, even while the node is running.
-         */
-        class NAPAPI DynamicCompressorNode : public Node
-        {
-            RTTI_ENABLE(Node)
-        public:
-            /**
-             * Operating mode.
-             */
-            enum class Mode
-            {
-                Compressor,    ///< Standard dynamic compression (finite ratio, smoothed gain).
-                Limiter        ///< Infinite-ratio ceiling clamp with sample-accurate peak detection.
-            };
+		/**
+		 * Standard dynamic range compressor, with an optional limiter mode.
+		 *
+		 * The input signal level is measured with a fast/slow envelope follower.
+		 * Whenever the measured level exceeds the threshold the gain is reduced
+		 * according to the compression ratio. The amount of reduction is smoothed
+		 * with separate attack and release time constants and is finally applied
+		 * to the signal (optionally with automatic makeup gain).
+		 *
+		 * The transfer characteristic follows the classic piecewise-linear law:
+		 *   x <= threshold            :  y = x
+		 *   x >  threshold            :  y = threshold + (x - threshold) / ratio
+		 *
+		 * In @ref Mode::Limiter the node drives its gain from the envelope
+		 * follower to keep the measured level at or below the threshold (acting
+		 * as an infinite-ratio limiter) and applies a per-sample safety clamp so
+		 * that no transient can push the output above the ceiling even when the
+		 * envelope lags. A soft knee of configurable width (see @ref setKnee)
+		 * starts the gain reduction below the ceiling and approaches the ceiling
+		 * exponentially without ever crossing it, so limiting begins before the
+		 * ceiling is reached while the output stays below it at all times. The
+		 * attack and release times still shape the gain response; the ratio
+		 * parameter is not used in this mode.
+		 *
+		 * All parameters are exposed in human-readable units (dB, seconds) and
+		 * can be changed at any time, even while the node is running.
+		 */
+		class NAPAPI DynamicCompressorNode : public Node
+		{
+			RTTI_ENABLE(Node)
+		public:
+			/**
+			 * Operating mode.
+			 */
+			enum class Mode
+			{
+				Compressor,    ///< Standard dynamic compression (finite ratio, smoothed gain).
+				Limiter        ///< Infinite-ratio ceiling clamp with sample-accurate peak detection.
+			};
 
-        public:
-            explicit DynamicCompressorNode(NodeManager& nodeManager);
+		public:
+			explicit DynamicCompressorNode(NodeManager& nodeManager);
 
-            InputPin  input  = { this };     ///< Audio input pin
-            OutputPin output = { this };     ///< Audio output pin
+			InputPin  input  = { this };     ///< Audio input pin
+			OutputPin output = { this };     ///< Audio output pin
 
-            /**
-             * Sets the operating mode.
-             * @param mode Compressor (standard) or Limiter (ceiling clamp).
-             */
-            void setMode(Mode mode);
+			/**
+			 * Sets the operating mode.
+			 * @param mode Compressor (standard) or Limiter (ceiling clamp).
+			 */
+			void setMode(Mode mode);
 
-            /**
-             * @return the current operating mode.
-             */
-            Mode getMode() const { return mMode.load(); }
+			/**
+			 * @return the current operating mode.
+			 */
+			Mode getMode() const { return mMode.load(); }
 
-            /**
-             * Sets the compression threshold.
-             * @param threshold Threshold in dB (e.g. -18.0).
-             */
-            void setThreshold(ControllerValue threshold);
+			/**
+			 * Sets the compression threshold.
+			 * @param threshold Threshold in dB (e.g. -18.0).
+			 */
+			void setThreshold(ControllerValue threshold);
 
-            /**
-             * @return the threshold in dB
-             */
-            ControllerValue getThreshold() const { return mThreshold.load(); }
+			/**
+			 * @return the threshold in dB
+			 */
+			ControllerValue getThreshold() const { return mThreshold.load(); }
 
-            /**
-             * Sets the compression ratio.
-             * @param ratio Ratio, 1.0 (bypass) up to e.g. 20.0.
-             */
-            void setRatio(ControllerValue ratio);
+			/**
+			 * Sets the compression ratio.
+			 * @param ratio Ratio, 1.0 (bypass) up to e.g. 20.0.
+			 */
+			void setRatio(ControllerValue ratio);
 
-            /**
-             * @return the compression ratio
-             */
-            ControllerValue getRatio() const { return mRatio.load(); }
+			/**
+			 * @return the compression ratio
+			 */
+			ControllerValue getRatio() const { return mRatio.load(); }
 
-            /**
-             * Sets the attack time.
-             * @param attack Time in seconds it takes the gain to reduce when the signal exceeds the threshold.
-             */
-            void setAttack(ControllerValue attack);
+			/**
+			 * Sets the soft-knee width for limiter mode.
+			 * @param knee Knee width in dB. Gain reduction starts knee below the
+			 * ceiling and rises smoothly while the output approaches the ceiling
+			 * exponentially without ever exceeding it. 0 disables the knee (hard
+			 * knee exactly at the ceiling).
+			 */
+			void setKnee(ControllerValue knee);
 
-            /**
-             * @return the attack time in seconds
-             */
-            ControllerValue getAttack() const { return mAttack.load(); }
+			/**
+			 * @return the soft-knee width in dB
+			 */
+			ControllerValue getKnee() const { return mKnee.load(); }
 
-            /**
-             * Sets the release time.
-             * @param release Time in seconds it takes the gain to return to unity after the signal falls below the threshold.
-             */
-            void setRelease(ControllerValue release);
+			/**
+			 * Sets the attack time.
+			 * @param attack Time in milliseconds it takes the gain to reduce when the signal exceeds the threshold.
+			 */
+			void setAttack(ControllerValue attack);
 
-            /**
-             * @return the release time in seconds
-             */
-            ControllerValue getRelease() const { return mRelease.load(); }
+			/**
+			 * @return the attack time in milliseconds
+			 */
+			ControllerValue getAttack() const { return mAttack.load(); }
 
-            /**
-             * Enables or disables automatic makeup gain, which compensates for
-             * the average amount of gain reduction.
-             * @param enabled true to apply makeup gain.
-             */
-            void setMakeupGainEnabled(bool enabled) { mMakeupGainEnabled.store(enabled); }
+			/**
+			 * Sets the release time.
+			 * @param release Time in milliseconds it takes the gain to return to unity after the signal falls below the threshold.
+			 */
+			void setRelease(ControllerValue release);
 
-            /**
-             * @return true when automatic makeup gain is enabled.
-             */
-            bool getMakeupGainEnabled() const { return mMakeupGainEnabled.load(); }
+			/**
+			 * @return the release time in milliseconds
+			 */
+			ControllerValue getRelease() const { return mRelease.load(); }
 
-            /**
-             * @return the current (instantaneous) gain reduction in dB.
-             */
-            ControllerValue getGainReduction() const { return mGainReductionDB; }
+			/**
+			 * Enables or disables automatic makeup gain, which compensates for
+			 * the average amount of gain reduction.
+			 * @param enabled true to apply makeup gain.
+			 */
+			void setMakeupGainEnabled(bool enabled) { mMakeupGainEnabled.store(enabled); }
 
-            /**
-             * @return the current envelope follower level in dB (for metering).
-             */
-            ControllerValue getLevelDB() const;
+			/**
+			 * @return true when automatic makeup gain is enabled.
+			 */
+			bool getMakeupGainEnabled() const { return mMakeupGainEnabled.load(); }
 
-        private:
-            void process() override;
+			/**
+			 * @return the current (instantaneous) gain reduction in dB.
+			 */
+			ControllerValue getGainReduction() const { return mGainReductionDB; }
 
-            void sampleRateChanged(float sampleRate) override;
+			/**
+			 * @return the current envelope follower level in dB (for metering).
+			 */
+			ControllerValue getLevelDB() const;
 
-            /// Recomputes the attack/release smoothing coefficients from the current time values and sample rate.
-            void updateCoefficients();
+		private:
+			void process() override;
 
-            std::atomic<Mode>            mMode           = { Mode::Compressor };
-            std::atomic<ControllerValue> mThreshold      = { -18.f };    ///< Threshold in dB (ceiling in limiter mode)
-            std::atomic<ControllerValue> mRatio          = { 4.f  };     ///< Compression ratio
-            std::atomic<ControllerValue> mAttack         = { 0.010f };  ///< Attack time in seconds
-            std::atomic<ControllerValue> mRelease        = { 0.200f };  ///< Release time in seconds
-            std::atomic<bool>            mMakeupGainEnabled = { true };
+			void sampleRateChanged(float sampleRate) override;
 
-            // Envelope follower state (audio thread only)
-            ControllerValue mEnvelope = 0.f;                          ///< Current measured level (linear)
-            ControllerValue mGain = 0.f;                               ///< Current applied gain reduction (linear)
-            ControllerValue mGainReductionDB = 0.f;                    ///< Current gain reduction in dB (for metering)
-            ControllerValue mMakeupGain = 0.f;                         ///< Slowly tracked makeup gain in dB (0 = no makeup), both modes
+			/// Recomputes the attack/release smoothing coefficients from the current time values and sample rate.
+			void updateCoefficients();
 
-            // Smoothing coefficients, updated when parameters or the sample rate change
-            ControllerValue mAttackCoeff  = 0.f;
-            ControllerValue mReleaseCoeff = 0.f;
-            ControllerValue mMakeupCoeff  = 0.f;
-        };
+			std::atomic<Mode>            mMode           = { Mode::Compressor };
+			std::atomic<ControllerValue> mThreshold      = { -18.f };    ///< Threshold in dB (ceiling in limiter mode)
+			std::atomic<ControllerValue> mRatio          = { 4.f  };     ///< Compression ratio
+			std::atomic<ControllerValue> mAttack         = { 10.f   };  ///< Attack time in milliseconds
+			std::atomic<ControllerValue> mRelease        = { 200.f  };  ///< Release time in milliseconds
+			std::atomic<ControllerValue> mKnee           = { 3.f    };  ///< Soft-knee width in dB (limiter mode)
+			std::atomic<bool>            mMakeupGainEnabled = { true };
 
-    }
+			// Envelope follower state (audio thread only)
+			ControllerValue mEnvelope = 0.f;                          ///< Current measured level (linear)
+			ControllerValue mGain = 0.f;                               ///< Current applied gain reduction (linear)
+			ControllerValue mGainReductionDB = 0.f;                    ///< Current gain reduction in dB (for metering)
+			ControllerValue mMakeupGain = 0.f;                         ///< Slowly tracked makeup gain in dB (0 = no makeup), both modes
+
+			// Smoothing coefficients, updated when parameters or the sample rate change
+			ControllerValue mAttackCoeff  = 0.f;
+			ControllerValue mReleaseCoeff = 0.f;
+			ControllerValue mMakeupCoeff  = 0.f;
+		};
+
+	}
 
 }

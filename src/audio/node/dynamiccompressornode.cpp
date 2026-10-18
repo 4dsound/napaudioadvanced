@@ -8,208 +8,246 @@
 #include <audio/utility/audiofunctions.h>
 
 #include <algorithm>
-#include <cmath>
+
+#include <nap/logger.h>
 
 RTTI_BEGIN_CLASS_NO_DEFAULT_CONSTRUCTOR(nap::audio::DynamicCompressorNode)
-    RTTI_FUNCTION("setMode", &nap::audio::DynamicCompressorNode::setMode)
-    RTTI_FUNCTION("getMode", &nap::audio::DynamicCompressorNode::getMode)
-    RTTI_FUNCTION("setThreshold", &nap::audio::DynamicCompressorNode::setThreshold)
-    RTTI_FUNCTION("setRatio", &nap::audio::DynamicCompressorNode::setRatio)
-    RTTI_FUNCTION("setAttack", &nap::audio::DynamicCompressorNode::setAttack)
-    RTTI_FUNCTION("setRelease", &nap::audio::DynamicCompressorNode::setRelease)
-    RTTI_FUNCTION("setMakeupGainEnabled", &nap::audio::DynamicCompressorNode::setMakeupGainEnabled)
-    RTTI_FUNCTION("getGainReduction", &nap::audio::DynamicCompressorNode::getGainReduction)
-    RTTI_FUNCTION("getLevelDB", &nap::audio::DynamicCompressorNode::getLevelDB)
+	RTTI_FUNCTION("setMode", &nap::audio::DynamicCompressorNode::setMode)
+	RTTI_FUNCTION("getMode", &nap::audio::DynamicCompressorNode::getMode)
+	RTTI_FUNCTION("setThreshold", &nap::audio::DynamicCompressorNode::setThreshold)
+	RTTI_FUNCTION("setRatio", &nap::audio::DynamicCompressorNode::setRatio)
+	RTTI_FUNCTION("setKnee", &nap::audio::DynamicCompressorNode::setKnee)
+	RTTI_FUNCTION("getKnee", &nap::audio::DynamicCompressorNode::getKnee)
+	RTTI_FUNCTION("setAttack", &nap::audio::DynamicCompressorNode::setAttack)
+	RTTI_FUNCTION("setRelease", &nap::audio::DynamicCompressorNode::setRelease)
+	RTTI_FUNCTION("setMakeupGainEnabled", &nap::audio::DynamicCompressorNode::setMakeupGainEnabled)
+	RTTI_FUNCTION("getGainReduction", &nap::audio::DynamicCompressorNode::getGainReduction)
+	RTTI_FUNCTION("getLevelDB", &nap::audio::DynamicCompressorNode::getLevelDB)
 RTTI_END_CLASS
 
 namespace nap
 {
 
-    namespace audio
-    {
+	namespace audio
+	{
 
-        DynamicCompressorNode::DynamicCompressorNode(NodeManager& nodeManager)
-            : Node(nodeManager)
-        {
-            updateCoefficients();
-        }
+		DynamicCompressorNode::DynamicCompressorNode(NodeManager& nodeManager)
+			: Node(nodeManager)
+		{
+			updateCoefficients();
+		}
 
-        void DynamicCompressorNode::setMode(Mode mode)
-        {
-            mMode.store(mode);
-            // Reset the tracked gain state so the mode switch does not cause a click.
-            mGain = 1.f;
-            // Makeup gain is tracked in dB in both modes (0.f = no makeup).
-            mMakeupGain = 0.f;
-        }
 
-        void DynamicCompressorNode::setThreshold(ControllerValue threshold)
-        {
-            mThreshold.store(threshold);
-        }
+		void DynamicCompressorNode::setMode(Mode mode)
+		{
+			mMode.store(mode);
+			// Reset the tracked gain state so the mode switch does not cause a click.
+			mGain = 1.f;
+			// Makeup gain is tracked in dB in both modes (0.f = no makeup).
+			mMakeupGain = 0.f;
+		}
 
-        void DynamicCompressorNode::setRatio(ControllerValue ratio)
-        {
-            if (ratio < 1.f)
-                ratio = 1.f;
-            mRatio.store(ratio);
-        }
 
-        void DynamicCompressorNode::setAttack(ControllerValue attack)
-        {
-            if (attack < 0.f)
-                attack = 0.f;
-            mAttack.store(attack);
-            updateCoefficients();
-        }
+		void DynamicCompressorNode::setThreshold(ControllerValue threshold)
+		{
+			mThreshold.store(threshold);
+		}
 
-        void DynamicCompressorNode::setRelease(ControllerValue release)
-        {
-            if (release < 0.f)
-                release = 0.f;
-            mRelease.store(release);
-            updateCoefficients();
-        }
 
-        ControllerValue DynamicCompressorNode::getLevelDB() const
-        {
-            // mEnvelope is the linear level tracked by the envelope follower (audio thread).
-            // Convert it to dB so it can be used directly as a metering value.
-            return toDB(mEnvelope);
-        }
+		void DynamicCompressorNode::setRatio(ControllerValue ratio)
+		{
+			if (ratio < 1.f)
+				ratio = 1.f;
+			mRatio.store(ratio);
+		}
 
-        void DynamicCompressorNode::sampleRateChanged(float sampleRate)
-        {
-            updateCoefficients();
-        }
 
-        void DynamicCompressorNode::updateCoefficients()
-        {
-            auto sampleRate = getNodeManager().getSampleRate();
-            if (sampleRate <= 0.f)
-                return;
+		void DynamicCompressorNode::setKnee(ControllerValue knee)
+		{
+			if (knee < 0.f)
+				knee = 0.f;
+			mKnee.store(knee);
+		}
 
-            // Convert a time constant (seconds) into a per-sample one-pole smoothing coefficient.
-            // Smaller time constant -> larger coefficient -> faster response.
-            auto timeToCoeff = [sampleRate](ControllerValue time) {
-                if (time <= 0.f)
-                    return 1.f; // Immediate response
-                return 1.f - expf(-1.f / (time * sampleRate));
-            };
 
-            mAttackCoeff = timeToCoeff(mAttack.load());
-            mReleaseCoeff = timeToCoeff(mRelease.load());
-            // Makeup gain tracks the average reduction on a slow time scale.
-            mMakeupCoeff = timeToCoeff(0.2f);
-        }
+		void DynamicCompressorNode::setAttack(ControllerValue attack)
+		{
+			if (attack < 0.f)
+				attack = 0.f;
+			mAttack.store(attack);
+			updateCoefficients();
+		}
 
-        void DynamicCompressorNode::process()
-        {
-            auto& outputBuffer = getOutputBuffer(output);
-            auto* inputBuffer = input.pull();
 
-            if (inputBuffer == nullptr)
-            {
-                std::fill(outputBuffer.begin(), outputBuffer.end(), 0.f);
-                return;
-            }
+		void DynamicCompressorNode::setRelease(ControllerValue release)
+		{
+			if (release < 0.f)
+				release = 0.f;
+			mRelease.store(release);
+			updateCoefficients();
+		}
 
-            const auto mode = mMode.load();
 
-            if (mode == Mode::Limiter)
-            {
-                // ---- Limiter: envelope-driven gain + sample-accurate safety clamp ----
-                // The main gain is driven by the fast/slow envelope follower so the
-                // response is smooth and musical (same measurement as the compressor
-                // branch). A per-sample clamp acts as a safety net so that no transient
-                // can push the output above the ceiling even when the envelope lags.
-                auto ceiling = dbToA(mThreshold.load(), -120.f);
-                if (ceiling <= 0.f)
-                    ceiling = 1.f; // threshold at/below silence -> no limiting
+		ControllerValue DynamicCompressorNode::getLevelDB() const
+		{
+			// mEnvelope is the linear level tracked by the envelope follower (audio thread).
+			// Convert it to dB so it can be used directly as a metering value.
+			return toDB(mEnvelope);
+		}
 
-                auto makeupEnabled = mMakeupGainEnabled.load();
 
-                for (auto i = 0; i < outputBuffer.size(); ++i)
-                {
-                    auto in = (*inputBuffer)[i];
-                    auto level = std::fabs(in);
+		void DynamicCompressorNode::sampleRateChanged(float sampleRate)
+		{
+			updateCoefficients();
+		}
 
-                    // 1. Track the input level with the fast/slow envelope follower.
-                    mEnvelope = level > mEnvelope
-                        ? mEnvelope + mAttackCoeff * (level - mEnvelope)
-                        : mEnvelope + mReleaseCoeff * (level - mEnvelope);
 
-                    // 2. Desired gain: keep the measured envelope at or below the
-                    //    ceiling (infinite-ratio limiting, driven by the envelope).
-                    auto targetGain = 1.f;
-                    if (mEnvelope > ceiling)
-                        targetGain = ceiling / mEnvelope;
+		void DynamicCompressorNode::updateCoefficients()
+		{
+			auto sampleRate = getNodeManager().getSampleRate();
+			if (sampleRate <= 0.f)
+				return;
 
-                    // 3. Smooth the gain (attack on reduction, release on recovery).
-                    mGain = targetGain < mGain
-                        ? mGain + mAttackCoeff * (targetGain - mGain)
-                        : mGain + mReleaseCoeff * (targetGain - mGain);
+			// Convert a time constant (milliseconds) into a per-sample one-pole smoothing coefficient.
+			// Smaller time constant -> larger coefficient -> faster response.
+			auto timeToCoeff = [sampleRate](ControllerValue time) {
+				if (time <= 0.f)
+					return 1.f; // Immediate response
+				return 1.f - expf(-1000.f / (time * sampleRate));
+			};
 
-                    // 4. Track the average gain reduction (dB) for makeup gain.
-                    auto reductionDB = std::min(60.f, -toDB(mGain));
-                    mMakeupGain += mMakeupCoeff * (reductionDB - mMakeupGain);
+			mAttackCoeff = timeToCoeff(mAttack.load());
+			mReleaseCoeff = timeToCoeff(mRelease.load());
+			// Makeup gain tracks the average reduction on a slow time scale.
+			mMakeupCoeff = timeToCoeff(200.f);
+		}
 
-                    // 5. Apply the gain plus makeup, then a per-sample safety clamp.
-                    auto makeup = makeupEnabled ? powf(10.f, mMakeupGain / 20.f) : 1.f;
-                    auto out = in * mGain * makeup;
-                    if (std::fabs(out) > ceiling)
-                        out = std::copysign(ceiling, out);
 
-                    outputBuffer[i] = out;
-                    mGainReductionDB = -toDB(mGain);
-                }
-                return;
-            }
+		void DynamicCompressorNode::process()
+		{
+			auto& outputBuffer = getOutputBuffer(output);
+			auto* inputBuffer = input.pull();
 
-            // ---- Compressor: standard dynamic compression ----
-            const auto threshold = mThreshold.load();
-            const auto ratio = mRatio.load();
-            const auto makeupEnabled = mMakeupGainEnabled.load();
+			if (inputBuffer == nullptr)
+			{
+				std::fill(outputBuffer.begin(), outputBuffer.end(), 0.f);
+				return;
+			}
 
-            for (auto i = 0; i < outputBuffer.size(); ++i)
-            {
-                auto in = (*inputBuffer)[i];
+			const auto mode = mMode.load();
 
-                // 1. Measure the input level with a fast/slow envelope follower.
-                auto level = std::fabs(in);
-                mEnvelope = level > mEnvelope
-                    ? mEnvelope + mAttackCoeff * (level - mEnvelope)
-                    : mEnvelope + mReleaseCoeff * (level - mEnvelope);
+			if (mode == Mode::Limiter)
+			{
+				// ---- Limiter: envelope-driven gain + sample-accurate safety clamp ----
+				// The main gain is driven by the fast/slow envelope follower so the
+				// response is smooth and musical (same measurement as the compressor
+				// branch). A per-sample clamp acts as a safety net so that no transient
+				// can push the output above the ceiling even when the envelope lags.
+				auto ceiling = dbToA(mThreshold.load(), -120.f);
+				if (ceiling <= 0.f)
+					ceiling = 1.f; // threshold at/below silence -> no limiting
+				const auto ceilingDB = mThreshold.load();
 
-                // 2. Compute the desired gain from the compression law (linear domain).
-                auto levelDB = toDB(mEnvelope);
-                auto targetGain = 1.f;
-                if (levelDB > threshold)
-                {
-                    auto excess = levelDB - threshold;
-                    auto reduced = excess / ratio;
-                    auto gainReductionDB = excess - reduced;
-                    // Convert the gain reduction from dB to linear: 10^(dB / 20).
-                    targetGain = powf(10.f, -gainReductionDB / 20.f);
-                }
+				auto makeupEnabled = mMakeupGainEnabled.load();
 
-                // 3. Smooth the gain: attack on reduction, release on release.
-                mGain = targetGain < mGain
-                    ? mGain + mAttackCoeff * (targetGain - mGain)
-                    : mGain + mReleaseCoeff * (targetGain - mGain);
+				for (auto i = 0; i < outputBuffer.size(); ++i)
+				{
+					auto in = (*inputBuffer)[i];
+					auto level = std::fabs(in);
 
-                // 4. Track the average gain reduction (dB) for makeup gain.
-                auto reductionDB = std::min(60.f, -toDB(mGain));
-                mMakeupGain += mMakeupCoeff * (reductionDB - mMakeupGain);
+					// 1. Track the input level with the fast/slow envelope follower.
+					mEnvelope = level > mEnvelope
+						? mEnvelope + mAttackCoeff * (level - mEnvelope)
+						: mEnvelope + mReleaseCoeff * (level - mEnvelope);
 
-                // 5. Apply the gain plus makeup (makeup compensates the average reduction).
-                auto makeup = makeupEnabled ? powf(10.f, mMakeupGain / 20.f) : 1.f;
-                outputBuffer[i] = in * mGain * makeup;
+					// 2. Desired gain: keep the measured envelope below the ceiling
+					//    (infinite-ratio limiting, driven by the envelope).
+					//    A soft knee of width kneeDB lies entirely below the ceiling:
+					//    at (ceiling - knee) the exponential curve leaves the unity
+					//    line with matching level and slope (no corner) and approaches
+					//    the ceiling asymptotically from below, so limiting begins
+					//    before the ceiling is reached while the output never exceeds
+					//    it for any envelope level. kneeDB = 0 keeps the hard knee.
+					auto targetGain = 1.f;
+					auto levelDB = toDB(mEnvelope);
+					const auto kneeDB = mKnee.load();
+					if (kneeDB > 0.f)
+					{
+						if (levelDB > ceilingDB - kneeDB)
+						{
+							auto gainDB = (ceilingDB - levelDB)
+								- kneeDB * expf((ceilingDB - kneeDB - levelDB) / kneeDB);
+							targetGain = powf(10.f, gainDB / 20.f);
+						}
+					}
+					else if (mEnvelope > ceiling)
+						targetGain = ceiling / mEnvelope;
 
-                mGainReductionDB = -toDB(mGain);
-            }
-        }
+					// 3. Smooth the gain (attack on reduction, release on recovery).
+					mGain = targetGain < mGain
+						? mGain + mAttackCoeff * (targetGain - mGain)
+						: mGain + mReleaseCoeff * (targetGain - mGain);
 
-    }
+					// 4. Track the average gain reduction (dB) for makeup gain.
+					auto reductionDB = std::min(60.f, -toDB(mGain));
+					mMakeupGain += mMakeupCoeff * (reductionDB - mMakeupGain);
+
+					// 5. Apply the gain plus makeup, then a per-sample safety clamp.
+					auto makeup = makeupEnabled ? powf(10.f, mMakeupGain / 20.f) : 1.f;
+					auto out = in * mGain * makeup;
+					if (std::fabs(out) > ceiling)
+						out = std::copysign(ceiling, out);
+
+					outputBuffer[i] = out;
+					mGainReductionDB = -toDB(mGain);
+				}
+				return;
+			}
+
+			// ---- Compressor: standard dynamic compression ----
+			const auto threshold = mThreshold.load();
+			const auto ratio = mRatio.load();
+			const auto makeupEnabled = mMakeupGainEnabled.load();
+
+			for (auto i = 0; i < outputBuffer.size(); ++i)
+			{
+				auto in = (*inputBuffer)[i];
+
+				// 1. Measure the input level with a fast/slow envelope follower.
+				auto level = std::fabs(in);
+				mEnvelope = level > mEnvelope
+					? mEnvelope + mAttackCoeff * (level - mEnvelope)
+					: mEnvelope + mReleaseCoeff * (level - mEnvelope);
+
+				// 2. Compute the desired gain from the compression law (linear domain).
+				auto levelDB = toDB(mEnvelope);
+				auto targetGain = 1.f;
+				if (levelDB > threshold)
+				{
+					auto excess = levelDB - threshold;
+					auto reduced = excess / ratio;
+					auto gainReductionDB = excess - reduced;
+					// Convert the gain reduction from dB to linear: 10^(dB / 20).
+					targetGain = powf(10.f, -gainReductionDB / 20.f);
+				}
+
+				// 3. Smooth the gain: attack on reduction, release on release.
+				mGain = targetGain < mGain
+					? mGain + mAttackCoeff * (targetGain - mGain)
+					: mGain + mReleaseCoeff * (targetGain - mGain);
+
+				// 4. Track the average gain reduction (dB) for makeup gain.
+				auto reductionDB = std::min(60.f, -toDB(mGain));
+				mMakeupGain += mMakeupCoeff * (reductionDB - mMakeupGain);
+
+				// 5. Apply the gain plus makeup (makeup compensates the average reduction).
+				auto makeup = makeupEnabled ? powf(10.f, mMakeupGain / 20.f) : 1.f;
+				outputBuffer[i] = in * mGain * makeup;
+
+				mGainReductionDB = -toDB(mGain);
+			}
+		}
+
+	}
 
 }
