@@ -140,6 +140,18 @@ namespace nap
 			bool getMakeupGainEnabled() const { return mMakeupGainEnabled.load(); }
 
 			/**
+			 * Bypasses the node: the input is passed through to the output without any
+			 * processing.
+			 * @param bypass true to bypass the node.
+			 */
+			void setByPass(bool bypass) { mBypass.store(bypass); }
+
+			/**
+			 * @return true when the node is bypassed.
+			 */
+			bool isBypassed() const { return mBypass.load(); }
+
+			/**
 			 * @return the current (instantaneous) gain reduction in dB.
 			 */
 			ControllerValue getGainReduction() const { return mGainReductionDB; }
@@ -164,6 +176,7 @@ namespace nap
 			std::atomic<ControllerValue> mRelease        = { 200.f  };  ///< Release time in milliseconds
 			std::atomic<ControllerValue> mKnee           = { 3.f    };  ///< Soft-knee width in dB (limiter mode)
 			std::atomic<bool>            mMakeupGainEnabled = { true };
+			std::atomic<bool>            mBypass          = { false };
 
 			// Envelope follower state (audio thread only)
 			ControllerValue mEnvelope = 0.f;                          ///< Current measured level (linear)

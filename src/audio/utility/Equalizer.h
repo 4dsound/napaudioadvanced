@@ -13,12 +13,12 @@ namespace nap
 		 * Single band equalizer, implemented as a biquad filter.
 		 * Supports a peaking band and low / high shelves.
 		 */
-		class NAPAPI Eq
+		class NAPAPI Equalizer
 		{
 		public:
 			enum class Mode { Peak, LowShelf, HighShelf, LowPass, HighPass };
 
-			Eq() = default;
+			Equalizer() = default;
 
 			void prepare(Mode mode, ControllerValue frequency, float sampleRate, ControllerValue gain, ControllerValue q);
 			void set(Mode mode, ControllerValue frequency, float sampleRate, ControllerValue gain, ControllerValue q);

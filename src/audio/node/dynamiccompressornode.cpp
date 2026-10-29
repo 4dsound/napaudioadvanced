@@ -134,6 +134,13 @@ namespace nap
 				return;
 			}
 
+			// Bypassed: pass the input through to the output without any processing.
+			if (mBypass.load())
+			{
+				std::copy(inputBuffer->begin(), inputBuffer->end(), outputBuffer.begin());
+				return;
+			}
+
 			const auto mode = mMode.load();
 
 			if (mode == Mode::Limiter)

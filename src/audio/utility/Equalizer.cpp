@@ -1,4 +1,4 @@
-#include "eq.h"
+#include "Equalizer.h"
 
 #include <mathutils.h>
 
@@ -10,7 +10,7 @@ namespace nap
 	namespace audio
 	{
 
-		void Eq::prepare(Mode mode, ControllerValue frequency, float sampleRate, ControllerValue gain, ControllerValue q)
+		void Equalizer::prepare(Mode mode, ControllerValue frequency, float sampleRate, ControllerValue gain, ControllerValue q)
 		{
 			mMode = mode;
 			mFrequency = frequency;
@@ -23,7 +23,7 @@ namespace nap
 		}
 
 
-		void Eq::set(Mode mode, ControllerValue frequency, float sampleRate, ControllerValue gain, ControllerValue q)
+		void Equalizer::set(Mode mode, ControllerValue frequency, float sampleRate, ControllerValue gain, ControllerValue q)
 		{
 			mMode = mode;
 			mFrequency = frequency;
@@ -36,7 +36,7 @@ namespace nap
 		}
 
 
-		void Eq::setSampleRate(float sampleRate)
+		void Equalizer::setSampleRate(float sampleRate)
 		{
 			mSampleRate = sampleRate;
 			float b0, b1, b2, a1, a2, c0, d0;
@@ -58,7 +58,7 @@ namespace nap
 		 * normalized so that a0 == 1, which is why a0 is not part of the signature. c0 is the wet gain
 		 * and d0 the dry gain, used to blend the filtered signal with the input.
 		 */
-		void Eq::calcCoeffs(Mode mode, ControllerValue frequency, ControllerValue gain, ControllerValue q,
+		void Equalizer::calcCoeffs(Mode mode, ControllerValue frequency, ControllerValue gain, ControllerValue q,
 			float sampleRate, float& b0, float& b1, float& b2, float& a1, float& a2, float& c0, float& d0)
 		{
 			// Guard against a zero or negative Q, which would divide by zero below.
