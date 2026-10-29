@@ -7,6 +7,8 @@
 // Audio includes
 #include <audio/core/audionode.h>
 
+#include "audio/utility/linearsmoothedvalue.h"
+
 namespace nap
 {
 	namespace audio
@@ -51,6 +53,8 @@ namespace nap
 				Compressor,    ///< Standard dynamic compression (finite ratio, smoothed gain).
 				Limiter        ///< Infinite-ratio ceiling clamp with sample-accurate peak detection.
 			};
+
+			static constexpr float smoothTime = 50.f;
 
 		public:
 			explicit DynamicCompressorNode(NodeManager& nodeManager);
@@ -144,7 +148,7 @@ namespace nap
 			 * processing.
 			 * @param bypass true to bypass the node.
 			 */
-			void setByPass(bool bypass) { mBypass.store(bypass); }
+			void setByPass(bool bypass);
 
 			/**
 			 * @return true when the node is bypassed.
@@ -155,11 +159,6 @@ namespace nap
 			 * @return the current (instantaneous) gain reduction in dB.
 			 */
 			ControllerValue getGainReduction() const { return mGainReductionDB; }
-
-			/**
-			 * @return the current envelope follower level in dB (for metering).
-			 */
-			ControllerValue getLevelDB() const;
 
 		private:
 			void process() override;
@@ -188,6 +187,8 @@ namespace nap
 			ControllerValue mAttackCoeff  = 0.f;
 			ControllerValue mReleaseCoeff = 0.f;
 			ControllerValue mMakeupCoeff  = 0.f;
+
+			LinearSmoothedValue<ControllerValue> mDryWet = { 1.f, 64 }; // Used internally for smooth bypassing. 0 = dry, 1 = wet.
 		};
 
 	}

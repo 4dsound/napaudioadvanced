@@ -22,7 +22,6 @@ RTTI_BEGIN_CLASS_NO_DEFAULT_CONSTRUCTOR(nap::audio::DynamicCompressorNode)
 	RTTI_FUNCTION("setRelease", &nap::audio::DynamicCompressorNode::setRelease)
 	RTTI_FUNCTION("setMakeupGainEnabled", &nap::audio::DynamicCompressorNode::setMakeupGainEnabled)
 	RTTI_FUNCTION("getGainReduction", &nap::audio::DynamicCompressorNode::getGainReduction)
-	RTTI_FUNCTION("getLevelDB", &nap::audio::DynamicCompressorNode::getLevelDB)
 RTTI_END_CLASS
 
 namespace nap
@@ -35,6 +34,7 @@ namespace nap
 			: Node(nodeManager)
 		{
 			updateCoefficients();
+			mDryWet.setStepCount(nodeManager.getSamplesPerMillisecond() * smoothTime);
 		}
 
 
@@ -88,17 +88,10 @@ namespace nap
 		}
 
 
-		ControllerValue DynamicCompressorNode::getLevelDB() const
-		{
-			// mEnvelope is the linear level tracked by the envelope follower (audio thread).
-			// Convert it to dB so it can be used directly as a metering value.
-			return toDB(mEnvelope);
-		}
-
-
 		void DynamicCompressorNode::sampleRateChanged(float sampleRate)
 		{
 			updateCoefficients();
+			mDryWet.setStepCount(getNodeManager().getSamplesPerMillisecond() * smoothTime);
 		}
 
 
@@ -123,6 +116,18 @@ namespace nap
 		}
 
 
+		void DynamicCompressorNode::setByPass(bool bypass)
+		{
+			if (bypass == mBypass.load())
+				return;
+
+			mBypass.store(bypass);
+			if (bypass)
+				mDryWet.setValue(0.f);
+			else
+				mDryWet.setValue(1.f);
+		}
+
 		void DynamicCompressorNode::process()
 		{
 			auto& outputBuffer = getOutputBuffer(output);
@@ -135,7 +140,7 @@ namespace nap
 			}
 
 			// Bypassed: pass the input through to the output without any processing.
-			if (mBypass.load())
+			if (mBypass.load() && !mDryWet.isRamping())
 			{
 				std::copy(inputBuffer->begin(), inputBuffer->end(), outputBuffer.begin());
 				return;
@@ -208,51 +213,57 @@ namespace nap
 					outputBuffer[i] = out;
 					mGainReductionDB = -toDB(mGain);
 				}
-				return;
 			}
 
-			// ---- Compressor: standard dynamic compression ----
-			const auto threshold = mThreshold.load();
-			const auto ratio = mRatio.load();
-			const auto makeupEnabled = mMakeupGainEnabled.load();
-
-			for (auto i = 0; i < outputBuffer.size(); ++i)
+			else
 			{
-				auto in = (*inputBuffer)[i];
+				// ---- Compressor: standard dynamic compression ----
+				const auto threshold = mThreshold.load();
+				const auto ratio = mRatio.load();
+				const auto makeupEnabled = mMakeupGainEnabled.load();
 
-				// 1. Measure the input level with a fast/slow envelope follower.
-				auto level = std::fabs(in);
-				mEnvelope = level > mEnvelope
-					? mEnvelope + mAttackCoeff * (level - mEnvelope)
-					: mEnvelope + mReleaseCoeff * (level - mEnvelope);
-
-				// 2. Compute the desired gain from the compression law (linear domain).
-				auto levelDB = toDB(mEnvelope);
-				auto targetGain = 1.f;
-				if (levelDB > threshold)
+				for (auto i = 0; i < outputBuffer.size(); ++i)
 				{
-					auto excess = levelDB - threshold;
-					auto reduced = excess / ratio;
-					auto gainReductionDB = excess - reduced;
-					// Convert the gain reduction from dB to linear: 10^(dB / 20).
-					targetGain = powf(10.f, -gainReductionDB / 20.f);
+					auto in = (*inputBuffer)[i];
+
+					// 1. Measure the input level with a fast/slow envelope follower.
+					auto level = std::fabs(in);
+					mEnvelope = level > mEnvelope
+						? mEnvelope + mAttackCoeff * (level - mEnvelope)
+						: mEnvelope + mReleaseCoeff * (level - mEnvelope);
+
+					// 2. Compute the desired gain from the compression law (linear domain).
+					auto levelDB = toDB(mEnvelope);
+					auto targetGain = 1.f;
+					if (levelDB > threshold)
+					{
+						auto excess = levelDB - threshold;
+						auto reduced = excess / ratio;
+						auto gainReductionDB = excess - reduced;
+						// Convert the gain reduction from dB to linear: 10^(dB / 20).
+						targetGain = powf(10.f, -gainReductionDB / 20.f);
+					}
+
+					// 3. Smooth the gain: attack on reduction, release on release.
+					mGain = targetGain < mGain
+						? mGain + mAttackCoeff * (targetGain - mGain)
+						: mGain + mReleaseCoeff * (targetGain - mGain);
+
+					// 4. Track the average gain reduction (dB) for makeup gain.
+					auto reductionDB = std::min(60.f, -toDB(mGain));
+					mMakeupGain += mMakeupCoeff * (reductionDB - mMakeupGain);
+
+					// 5. Apply the gain plus makeup (makeup compensates the average reduction).
+					auto makeup = makeupEnabled ? powf(10.f, mMakeupGain / 20.f) : 1.f;
+					outputBuffer[i] = in * mGain * makeup;
+
+					mGainReductionDB = -toDB(mGain);
 				}
-
-				// 3. Smooth the gain: attack on reduction, release on release.
-				mGain = targetGain < mGain
-					? mGain + mAttackCoeff * (targetGain - mGain)
-					: mGain + mReleaseCoeff * (targetGain - mGain);
-
-				// 4. Track the average gain reduction (dB) for makeup gain.
-				auto reductionDB = std::min(60.f, -toDB(mGain));
-				mMakeupGain += mMakeupCoeff * (reductionDB - mMakeupGain);
-
-				// 5. Apply the gain plus makeup (makeup compensates the average reduction).
-				auto makeup = makeupEnabled ? powf(10.f, mMakeupGain / 20.f) : 1.f;
-				outputBuffer[i] = in * mGain * makeup;
-
-				mGainReductionDB = -toDB(mGain);
 			}
+
+			if (mDryWet.isRamping())
+				for (int i = 0; i < outputBuffer.size(); ++i)
+					outputBuffer[i] = math::lerp((*inputBuffer)[i], outputBuffer[i], mDryWet.getNextValue());
 		}
 
 	}
