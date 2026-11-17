@@ -121,9 +121,16 @@ namespace nap
 
                 /**
                  * Adjust cutting of low frequencies from the input signal
-                 * @param value normalized between o and 1
+                 * @param value normalized between 0 and 1
                  */
                 void setLowCut(ControllerValue value);
+
+                /**
+                 * Adjust cutting of low frequencies from the input signal.
+                 * Same as setLowCut, different input scaling.
+                 * @param cutoff Cutoff frequency in Hz
+                 */
+                void setLowCutFrequency(ControllerValue cutoff);
 
                 /**
                  * Applies a new set of magic numbers.

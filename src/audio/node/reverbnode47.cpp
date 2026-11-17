@@ -98,6 +98,13 @@ namespace nap
                 mInputLowCutOnePole.setCutoffFrequency(mInputLowCut, getNodeManager().getSampleRate());
             }
 
+            
+            void ReverbNode::setLowCutFrequency(ControllerValue cutoff)
+            {
+                mInputLowCut = cutoff;
+                mInputLowCutOnePole.setCutoffFrequency(mInputLowCut, getNodeManager().getSampleRate());
+            }
+
 
             void ReverbNode::sampleRateChanged(float sampleRate)
             {
